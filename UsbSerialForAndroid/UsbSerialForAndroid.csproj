@@ -7,6 +7,5 @@
     <AssemblyName>Android.UsbSerial</AssemblyName>
     <RootNamespace>Hoho.Android.UsbSerial</RootNamespace>
 	<WarningLevel>0</WarningLevel>
-	<Platforms>x64</Platforms>
   </PropertyGroup>
 </Project>
