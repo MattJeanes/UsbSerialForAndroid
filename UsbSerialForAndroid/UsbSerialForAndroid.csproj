@@ -1,4 +1,4 @@
-<Project Sdk="Xamarin.Legacy.Sdk/0.2.0-alpha3">
+﻿<Project Sdk="Xamarin.Legacy.Sdk/0.2.0-alpha3">
   <PropertyGroup>
     <TargetFrameworks>net7.0-android</TargetFrameworks>
     <SupportedOSPlatformVersion>33</SupportedOSPlatformVersion>
@@ -7,5 +7,6 @@
     <AssemblyName>Android.UsbSerial</AssemblyName>
     <RootNamespace>Hoho.Android.UsbSerial</RootNamespace>
 	<WarningLevel>0</WarningLevel>
+	<Platforms>x64</Platforms>
   </PropertyGroup>
 </Project>
