@@ -1,20 +1,5 @@
 /* Copyright 2017 Tyler Technologies Inc.
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
- * USA.
- *
  * Project home page: https://github.com/anotherlab/xamarin-usb-serial-for-android
  * Portions of this library are based on usb-serial-for-android (https://github.com/mik3y/usb-serial-for-android).
  * Portions of this library are based on Xamarin USB Serial for Android (https://bitbucket.org/lusovu/xamarinusbserial).
@@ -57,6 +42,7 @@ namespace Hoho.Android.UsbSerial.Driver
              * Configuration Request Types
              */
             private const int REQTYPE_HOST_TO_DEVICE = 0x41;
+            private const int REQTYPE_DEVICE_TO_HOST = 0xc1;
 
             /*
              * Configuration Request Codes
@@ -71,6 +57,11 @@ namespace Hoho.Android.UsbSerial.Driver
             private const int FLUSH_READ_CODE = 0x0a;
             private const int FLUSH_WRITE_CODE = 0x05;
 
+            private const int GET_MODEM_STATUS_REQUEST = 0x08; // 0x08 Get modem status. 
+            private const int MODEM_STATUS_CTS = 0x10;
+            private const int MODEM_STATUS_DSR = 0x20;
+            private const int MODEM_STATUS_RI = 0x40;
+            private const int MODEM_STATUS_CD = 0x80;
             /*
              * SILABSER_IFC_ENABLE_REQUEST_CODE
              */
@@ -95,7 +86,7 @@ namespace Hoho.Android.UsbSerial.Driver
             private UsbEndpoint mReadEndpoint;
             private UsbEndpoint mWriteEndpoint;
 
-            private IUsbSerialDriver Driver;
+            private new IUsbSerialDriver Driver;
             private string TAG => (Driver as Cp21xxSerialDriver)?.TAG;
 
 
@@ -219,28 +210,16 @@ namespace Hoho.Android.UsbSerial.Driver
             public override int Write(byte[] src, int timeoutMillis)
             {
                 int offset = 0;
+                int writeLength;
+                int amtWritten;
 
                 while (offset < src.Length)
                 {
-                    int writeLength;
-                    int amtWritten;
-
                     lock(mWriteBufferLock) {
-                        byte[] writeBuffer;
 
-                        writeLength = Math.Min(src.Length - offset, mWriteBuffer.Length);
-                        if (offset == 0)
-                        {
-                            writeBuffer = src;
-                        }
-                        else
-                        {
-                            // bulkTransfer does not support offsets, make a copy.
-                            Buffer.BlockCopy(src, offset, mWriteBuffer, 0, writeLength);
-                            writeBuffer = mWriteBuffer;
-                        }
+                        writeLength = src.Length - offset;
 
-                        amtWritten = mConnection.BulkTransfer(mWriteEndpoint, writeBuffer, writeLength,
+                        amtWritten = mConnection.BulkTransfer(mWriteEndpoint, src, offset, writeLength,
                                 timeoutMillis);
                     }
                     if (amtWritten <= 0)
@@ -318,42 +297,56 @@ namespace Hoho.Android.UsbSerial.Driver
                 SetConfigSingle(SILABSER_SET_LINE_CTL_REQUEST_CODE, configDataBits);
             }
 
+            private int GetStatus()
+            {
+                byte[] data = new byte[1];
+                int result = mConnection.ControlTransfer((UsbAddressing)REQTYPE_DEVICE_TO_HOST, GET_MODEM_STATUS_REQUEST,
+                        0, 0, data, data.Length, USB_WRITE_TIMEOUT_MILLIS);
+                if (result != 1)
+                {
+                    throw new IOException("Get modem status failed: result=" + result);
+                }
+                return data[0];
+            }
+
             public override bool GetCD()
             {
-                return false;
+                return (GetStatus() & MODEM_STATUS_CD) != 0;
             }
 
             public override bool GetCTS()
             {
-                return false;
+                return (GetStatus() & MODEM_STATUS_CTS) != 0;
             }
 
             public override bool GetDSR()
             {
-                return false;
+                return (GetStatus() & MODEM_STATUS_DSR) != 0;
             }
 
             public override bool GetDTR()
             {
-                return true;
+                return (GetStatus() & MCR_DTR) != 0;
             }
 
             public override void SetDTR(bool value)
             {
+                SetConfigSingle(SILABSER_SET_MHS_REQUEST_CODE, (value ? MCR_DTR : 0) | CONTROL_WRITE_DTR);
             }
 
             public override bool GetRI()
             {
-                return false;
+                return (GetStatus() & MODEM_STATUS_RI) != 0;
             }
 
             public override bool GetRTS()
             {
-                return true;
+                return (GetStatus() & MCR_RTS) != 0;
             }
 
             public override void SetRTS(bool value)
             {
+                SetConfigSingle(SILABSER_SET_MHS_REQUEST_CODE, (value ? MCR_RTS : 0) | CONTROL_WRITE_RTS);
             }
 
             public override Boolean PurgeHwBuffers(Boolean purgeReadBuffers, Boolean purgeWriteBuffers)
